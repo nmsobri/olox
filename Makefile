@@ -4,7 +4,7 @@ $(exe):
 	@odin build . -debug -out:bin/$(exe)
 
 run: $(exe)
-	@./bin/$(exe)
+	@./bin/$(exe) examples/main.lox
 
 clean:
-	@rm -rf bin/*
+	@clear && rm -rf bin/*

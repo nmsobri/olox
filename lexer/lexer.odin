@@ -15,6 +15,7 @@ lexer :: struct {
     scan_token: proc(^lexer),
     advance: proc(^lexer) -> rune,
     match: proc(^lexer, rune) -> bool,
+    peek: proc(^lexer) -> rune,
 }
 
 lexer_new :: proc(source: []byte) -> lexer {
@@ -31,6 +32,7 @@ lexer_new :: proc(source: []byte) -> lexer {
         scan_token = lexer_scan_token,
         advance = lexer_advance,
         match =  lexer_match,
+        peek = lexer_peek,
     }
 }
 
@@ -40,7 +42,7 @@ lexer_scan_tokens :: proc(lex: ^lexer) -> [dynamic]token {
         lex->scan_token()
     }
 
-    append(&lex.tokens, token_new(.EOF, "", nil, lex.line))
+    append(&lex.tokens, token_new(.EOF, "<EOF>", "<EOF>", lex.line))
     return lex.tokens
 }
 
@@ -63,14 +65,49 @@ lexer_scan_token :: proc(lex: ^lexer) {
         case '=': t = .EQUAL_EQUAL if lex->match('=') else .EQUAL
         case '<': t = .LESS_EQUAL if lex->match('=') else .LESS
         case '>': t = .GREATER_EQUAL if lex->match('=') else .GREATER
-
-        case:  {
-            lox.error(lex.line, "Unexpected character.");
-            break;
+        case ' ', '\r', '\t': return
+        case '\n': {
+            lex.line += 1
+            return
         }
+
+       case '/': {
+            if lex->match('/') {
+                for !lex->is_at_end() && lex->peek() != '\n' {
+                    lex->advance()
+                }
+                return
+            }
+
+            t = .SLASH
+        }
+
+        case '"': {
+            for !lex->is_at_end() && lex->peek() != '"' {
+                if lex->peek() == '\n' {
+                    lex.line += 1
+                }
+
+                lex->advance()
+            }
+
+            if lex->is_at_end() {
+                lox.error(lex.line, "Unterminated string.")
+                return
+            }
+
+            lex->advance() // consume the closing quote
+
+            str := string(lex.source[lex.start + 1: lex.current - 1])
+            append(&lex.tokens, token_new(.STRING, str, str, lex.line))
+            return
+        }
+
+        case: lox.error(lex.line, "Unexpected character.");
     }
 
-    append(&lex.tokens, token_new(t, "", lex.source[lex.start:lex.current], lex.line))
+    str:= string(lex.source[lex.start:lex.current])
+    append(&lex.tokens, token_new(t, str, str, lex.line))
 }
 
 lexer_advance :: proc(lex: ^lexer) -> rune {
@@ -93,3 +130,11 @@ lexer_match :: proc(lex: ^lexer, search_needle: rune) -> bool {
     lex.current += s
     return true
 }
+
+lexer_peek :: proc(lex: ^lexer)-> rune {
+    if lex->is_at_end() do return rune(0)
+    r, _ := utf8.decode_rune(lex.source[lex.current:])
+    return r
+}
+
+// Todo: number literals

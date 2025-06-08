@@ -3,6 +3,7 @@ package lexer
 import fmt "core:fmt"
 
 TokenType :: enum {
+    ILLEGAL,
     LEFT_PAREN,
     RIGHT_PAREN,
     LEFT_BRACE,
@@ -48,17 +49,22 @@ TokenType :: enum {
     EOF,
 }
 
+Literal :: union {
+    string,
+    bool,
+}
+
 token :: struct {
     type: TokenType,
     lexeme: string,
-    literal: any,
+    literal: Literal,
     line: int,
 
-    new: proc(type: TokenType, lexeme: string, literal: any, line:int) -> token,
+    new: proc(type: TokenType, lexeme: string, literal: string, line:int) -> token,
     to_string: proc(token: ^token) -> string,
 }
 
-token_new :: proc( type: TokenType, lexeme: string, literal: any, line:int) -> token {
+token_new :: proc( type: TokenType, lexeme: string, literal: string, line:int) -> token {
     return token {
         type = type,
         lexeme = lexeme,
@@ -72,6 +78,6 @@ token_new :: proc( type: TokenType, lexeme: string, literal: any, line:int) -> t
 
 token_to_string :: proc(token: ^token) -> string {
     return fmt.tprintf(
-        "%s %s %s", token.type, token.lexeme, token.literal,
+        "type:%s, lexeme:%s, literal:%v", token.type, token.lexeme, token.literal,
     )
 }
