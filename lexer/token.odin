@@ -52,6 +52,7 @@ TokenType :: enum {
 Literal :: union {
     string,
     bool,
+    f64,
 }
 
 token :: struct {
@@ -60,11 +61,11 @@ token :: struct {
     literal: Literal,
     line: int,
 
-    new: proc(type: TokenType, lexeme: string, literal: string, line:int) -> token,
+    new: proc(type: TokenType, lexeme: string, literal: Literal, line:int) -> token,
     to_string: proc(token: ^token) -> string,
 }
 
-token_new :: proc( type: TokenType, lexeme: string, literal: string, line:int) -> token {
+token_new :: proc( type: TokenType, lexeme: string, literal: Literal, line:int) -> token {
     return token {
         type = type,
         lexeme = lexeme,
