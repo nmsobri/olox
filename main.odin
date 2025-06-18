@@ -3,19 +3,45 @@ package main
 import "lox"
 import "core:fmt"
 import lex "lexer"
+import "vm"
 import "core:bufio"
 import os "core:os"
 import strings "core:strings"
 
 main :: proc() {
-    if len(os.args) > 2 {
-        fmt.eprintln("Usage: olox <file>")
-        os.exit(1)
-    } else if len(os.args) == 2 {
-        run_file(os.args[1])
-    } else {
-        run_prompt()
-    }
+//    if len(os.args) > 2 {
+//        fmt.eprintln("Usage: olox <file>")
+//        os.exit(1)
+//    } else if len(os.args) == 2 {
+//        run_file(os.args[1])
+//    } else {
+//        run_prompt()
+//    }
+
+    v := vm.vm_new()
+    defer v->free()
+
+    chunk := vm.chunk_new()
+    defer chunk->free()
+
+    chunk->write(u8(vm.OpCode.OP_CONSTANT), 1)
+    chunk->write(chunk->add_constant(3), 1)
+
+    chunk->write(u8(vm.OpCode.OP_CONSTANT), 1)
+    chunk->write(chunk->add_constant(4), 1)
+
+    chunk->write(u8(vm.OpCode.OP_ADD), 1)
+
+    chunk->write(u8(vm.OpCode.OP_CONSTANT), 1)
+    chunk->write(chunk->add_constant(6), 1)
+
+    chunk->write(u8(vm.OpCode.OP_DIVIDE),1)
+    chunk->write(u8(vm.OpCode.OP_NEGATE),1)
+
+    chunk->write(u8(vm.OpCode.OP_RETURN), 2)
+    // chunk->dissassemble("test chunk")
+
+    v->interpret(chunk)
 }
 
 run_file :: proc(filename: string) {
