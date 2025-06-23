@@ -1,6 +1,7 @@
+55
 // this is a comment
 (( )){} // grouping stuff
-!*+-/=<> <= == // operators
+!*+-/=<> <= >= == // operators
 "A世🌟"
 98
 35

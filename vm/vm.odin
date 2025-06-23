@@ -4,6 +4,7 @@ STACK_MAX :: 256
 DEBUG_TRACE_EXECUTION :: true
 
 import fmt "core:fmt"
+import compiler "../compiler"
 
 InterpretResult :: enum u8 {
     INTERPRET_OK,
@@ -12,7 +13,7 @@ InterpretResult :: enum u8 {
 }
 
 Vm :: struct {
-    ip: [^]u8,
+    ip: [^]byte,
     chunk: ^Chunk,
     sp: int,
     stack: [STACK_MAX]Value,
@@ -21,10 +22,10 @@ Vm :: struct {
 
 VmProc :: struct {
     free: proc(vm: ^Vm),
-    read_byte: proc(vm: ^Vm) -> u8,
+    read_byte: proc(vm: ^Vm) -> byte,
     read_constant: proc(vm: ^Vm) -> Value,
     run: proc(vm: ^Vm) -> InterpretResult,
-    interpret: proc(vm: ^Vm, chunk: ^Chunk) -> InterpretResult,
+    interpret: proc(vm: ^Vm, source: []byte) -> InterpretResult,
     pop: proc(vm: ^Vm) -> Value,
     push: proc(vm: ^Vm, value: Value),
 }
@@ -49,55 +50,57 @@ vm_free :: proc(vm: ^Vm) {
 
 }
 
-vm_interpret :: proc(vm: ^Vm, chunk: ^Chunk) -> InterpretResult {
-    vm.chunk = chunk
-    vm.ip = raw_data(vm.chunk.code)
-    return vm->run()
+vm_interpret :: proc(v: ^Vm, source: []byte) -> InterpretResult {
+    c := compiler.compiler_new()
+    defer compiler.compiler_free(c)
+
+    c->compile(source)
+    return .INTERPRET_OK
 }
 
-vm_run :: proc(vm: ^Vm) -> InterpretResult {
+vm_run :: proc(v: ^Vm) -> InterpretResult {
     for {
-        offset := uintptr(vm.ip) - uintptr(raw_data(vm.chunk.code))
-        instruction := vm->read_byte()
+        offset := uintptr(v.ip) - uintptr(raw_data(v.chunk.code))
+        instruction := v->read_byte()
 
         switch OpCode(instruction) {
             case .OP_RETURN: {
                 trace_execution(offset)
-                val := vm->pop()
+                val := v->pop()
                 fmt.println(val)
                 return .INTERPRET_OK
             }
 
             case .OP_CONSTANT: {
-                constant := vm->read_constant()
-                vm->push(constant)
+                constant := v->read_constant()
+                v->push(constant)
             }
 
-            case .OP_NEGATE: vm->push(-(vm->pop()))
+            case .OP_NEGATE: v->push(-(v->pop().(f64)))
 
 
             case .OP_ADD : {
-                right := vm->pop()
-                left := vm->pop()
-                vm->push(left + right)
+                right := v->pop().(f64)
+                left := v->pop().( f64)
+                v->push(left + right)
             }
 
             case .OP_SUBTRACT: {
-                right := vm->pop()
-                left := vm->pop()
-                vm->push(left - right)
+                right := v->pop().(f64)
+                left := v->pop().(f64)
+                v->push(left - right)
             }
 
             case .OP_MULTIPLY: {
-                right := vm->pop()
-                left := vm->pop()
-                vm->push(left * right)
+                right := v->pop().(f64)
+                left := v->pop().(f64)
+                v->push(left * right)
             }
 
             case .OP_DIVIDE: {
-                right := vm->pop()
-                left := vm->pop()
-                vm->push(left / right)
+                right := v->pop().(f64)
+                left := v->pop().(f64)
+                v->push(left / right)
             }
 
             case: {
@@ -110,25 +113,25 @@ vm_run :: proc(vm: ^Vm) -> InterpretResult {
     }
 }
 
-vm_read_byte :: proc(vm: ^Vm) -> u8 {
-    result := vm.ip[0]
-    vm.ip = vm.ip[1:]
+vm_read_byte :: proc(v: ^Vm) -> byte {
+    result := v.ip[0]
+    v.ip = v.ip[1:]
     return result
 }
 
-vm_read_constant :: proc(vm: ^Vm) -> Value {
-    constant_value := vm.chunk.constants.values[vm->read_byte()]
+vm_read_constant :: proc(v: ^Vm) -> Value {
+    constant_value := v.chunk.constants.values[v->read_byte()]
     return constant_value
 }
 
-vm_push :: proc(vm: ^Vm, value: Value) {
-    vm.stack[vm.sp] = value
-    vm.sp += 1
+vm_push :: proc(v: ^Vm, value: Value) {
+    v.stack[v.sp] = value
+    v.sp += 1
 }
 
-vm_pop :: proc(vm: ^Vm) -> Value {
-    vm.sp -= 1
-    return vm.stack[vm.sp]
+vm_pop :: proc(v: ^Vm) -> Value {
+    v.sp -= 1
+    return v.stack[v.sp]
 }
 
 trace_execution :: proc(offset: uintptr) {

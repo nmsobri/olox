@@ -1,244 +1,247 @@
 package lexer
 import "../lox"
-import utf8 "core:unicode/utf8"
 import strconv "core:strconv"
+import utf8 "core:unicode/utf8"
 
 Keywords := make(map[string]TokenType)
 
 @(init)
 init :: proc() {
-    Keywords["and"] = .AND
-    Keywords["class"] = .CLASS
-    Keywords["else"] = .ELSE
-    Keywords["false"] = .FALSE
-    Keywords["fun"] = .FUN
-    Keywords["for"] = .FOR
-    Keywords["if"] = .IF
-    Keywords["nil"] = .NIL
-    Keywords["or"] = .OR
-    Keywords["print"] = .PRINT
-    Keywords["return"] = .RETURN
-    Keywords["super"] = .SUPER
-    Keywords["this"] = .THIS
-    Keywords["true"] = .TRUE
-    Keywords["var"] = .VAR
-    Keywords["while"] = .WHILE
+	Keywords["and"] = .AND
+	Keywords["class"] = .CLASS
+	Keywords["else"] = .ELSE
+	Keywords["false"] = .FALSE
+	Keywords["fun"] = .FUN
+	Keywords["for"] = .FOR
+	Keywords["if"] = .IF
+	Keywords["nil"] = .NIL
+	Keywords["or"] = .OR
+	Keywords["print"] = .PRINT
+	Keywords["return"] = .RETURN
+	Keywords["super"] = .SUPER
+	Keywords["this"] = .THIS
+	Keywords["true"] = .TRUE
+	Keywords["var"] = .VAR
+	Keywords["while"] = .WHILE
 }
 
 @(fini)
 deinit :: proc() {
-    delete(Keywords)
+	delete(Keywords)
 }
 
-lexer :: struct {
-    source: []byte,
-    tokens: [dynamic]token,
-    start: int,
-    current: int,
-    line: int,
-
-    new: proc(source: []byte) -> lexer,
-    scan_tokens: proc(^lexer) -> [dynamic]token,
-    is_at_end: proc(^lexer) -> bool,
-    scan_token: proc(^lexer),
-    advance: proc(^lexer) -> rune,
-    match: proc(^lexer, rune) -> bool,
-    peek: proc(^lexer) -> rune,
-    peek_next: proc(^lexer) -> rune,
-    is_digit: proc(^lexer, rune) -> bool,
-    is_alpha: proc(^lexer, rune) -> bool,
-    is_alpha_numeric: proc(^lexer, rune) -> bool,
-    identifier: proc(^lexer) -> TokenType,
+Lexer :: struct {
+	source:           []byte,
+	start:            int,
+	current:          int,
+	line:             int,
+	using lexer_proc: lexer_proc,
 }
 
-lexer_new :: proc(source: []byte) -> lexer {
-    return lexer {
-        source = source,
-        tokens = make([dynamic]token, 0),
-        start = 0,
-        current= 0,
-        line = 1,
-
-        new = lexer_new,
-        scan_tokens = lexer_scan_tokens,
-        is_at_end = lexer_is_at_end,
-        scan_token = lexer_scan_token,
-        advance = lexer_advance,
-        match =  lexer_match,
-        peek = lexer_peek,
-        peek_next = lexer_peek_next,
-        is_digit =  lexer_is_digit,
-        is_alpha = lexer_is_alpha,
-        is_alpha_numeric = lexer_is_alpha_numeric,
-        identifier = lexer_identifier,
-    }
+lexer_proc :: struct {
+	scan_token:      proc(lexer: ^Lexer) -> Token,
+	is_at_end:       proc(lexer: ^Lexer) -> bool,
+	advance:         proc(lexer: ^Lexer) -> byte,
+	match:           proc(lexer: ^Lexer, c: byte) -> bool,
+	peek:            proc(lexer: ^Lexer) -> byte,
+	peek_next:       proc(lexer: ^Lexer) -> byte,
+	skip_whitespace: proc(lexer: ^Lexer),
+	string:          proc(lexer: ^Lexer) -> Token,
+	is_digit:        proc(lexer: ^Lexer, c: byte) -> bool,
+	is_alpha:        proc(lexer: ^Lexer, c: byte) -> bool,
+	number:          proc(lexer: ^Lexer) -> Token,
+	identifier:      proc(lexer: ^Lexer) -> Token,
 }
 
-lexer_scan_tokens :: proc(lex: ^lexer) -> [dynamic]token {
-    for !lex->is_at_end() {
-        lex.start = lex.current
-        lex->scan_token()
-    }
+lexer_new :: proc(source: []byte) -> ^Lexer {
+	lex := new(Lexer)
 
-    append(&lex.tokens, token_new(.EOF, "<EOF>", "<EOF>", lex.line))
-    return lex.tokens
+	lex.source = source
+	lex.start = 0
+	lex.current = 0
+	lex.line = 1
+
+	lex.scan_token = lexer_scan_token
+	lex.is_at_end = lexer_is_at_end
+	lex.advance = lexer_advance
+	lex.match = lexer_match
+	lex.peek = lexer_peek
+	lex.peek_next = lexer_peek_next
+	lex.skip_whitespace = lexer_skip_whitespace
+	lex.string = lexer_string
+	lex.is_digit = lexer_is_digit
+	lex.is_alpha = lexer_is_alpha
+	lex.number = lexer_number
+	lex.identifier = lexer_identifier
+
+	return lex
 }
 
-lexer_scan_token :: proc(lex: ^lexer) {
-    t: TokenType
-    c: rune = lex->advance()
+lexer_scan_token :: proc(lexer: ^Lexer) -> Token {
+	lexer->skip_whitespace()
 
-    switch {
-        case c == '(': t = .LEFT_PAREN
-        case c == ')': t = .RIGHT_PAREN
-        case c == '{': t = .LEFT_BRACE
-        case c == '}': t = .RIGHT_BRACE
-        case c == ',': t = .COMMA
-        case c == '.': t = .DOT
-        case c == '-': t = .MINUS
-        case c == '+': t = .PLUS
-        case c == ';': t = .SEMICOLON
-        case c == '*': t = .STAR
-        case c == '!': t = .BANG_EQUAL if lex->match('=') else .BANG
-        case c == '=': t = .EQUAL_EQUAL if lex->match('=') else .EQUAL
-        case c == '<': t = .LESS_EQUAL if lex->match('=') else .LESS
-        case c == '>': t = .GREATER_EQUAL if lex->match('=') else .GREATER
-        case c == ' ' || c ==  '\r' || c == '\t': return
+	lexer.start = lexer.current
 
-        case c == '\n': {
-            lex.line += 1
-            return
-        }
+	if lexer->is_at_end() do return token_new(.EOF, lexer)
 
-       case c == '/': {
-            if lex->match('/') {
-                for !lex->is_at_end() && lex->peek() != '\n' {
-                    lex->advance()
-                }
+	c := lexer->advance()
 
-                return
-            }
+	switch {
+	case c == '(':
+		return token_new(.LEFT_PAREN, lexer)
 
-            t = .SLASH
-        }
+	case c == ')':
+		return token_new(.RIGHT_PAREN, lexer)
 
-        case c == '"': {
-            for !lex->is_at_end() && lex->peek() != '"' {
-                if lex->peek() == '\n' {
-                    lex.line += 1
-                }
+	case c == '{':
+		return token_new(.LEFT_BRACE, lexer)
 
-                lex->advance()
-            }
+	case c == '}':
+		return token_new(.RIGHT_BRACE, lexer)
 
-            if lex->is_at_end() {
-                lox.error(lex.line, "Unterminated string.")
-                return
-            }
+	case c == ';':
+		return token_new(.SEMICOLON, lexer)
 
-            lex->advance() // consume the closing quote
+	case c == ',':
+		return token_new(.COMMA, lexer)
 
-            str := string(lex.source[lex.start + 1: lex.current - 1])
-            append(&lex.tokens, token_new(.STRING, str, str, lex.line))
-            return
-        }
+	case c == '.':
+		return token_new(.DOT, lexer)
 
-        case lex->is_digit(c): {
-            for lex->is_digit(lex->peek()) do lex->advance()
+	case c == '-':
+		return token_new(.MINUS, lexer)
 
-            if lex->peek() == '.' && lex->is_digit(lex->peek_next()) {
-                lex->advance() // consume the '.'
-                for lex->is_digit(lex->peek()) do lex->advance()
-            }
+	case c == '+':
+		return token_new(.PLUS, lexer)
 
-            t = .NUMBER
-            str := string(lex.source[lex.start:lex.current])
+	case c == '/':
+		return token_new(.SLASH, lexer)
 
-            if str_f64, ok := strconv.parse_f64(str); ok {
-                literal: Literal = f64(str_f64)
-                append(&lex.tokens, token_new(t, str, literal, lex.line))
-            }
+	case c == '*':
+		return token_new(.STAR, lexer)
 
-            return
-        }
+	case c == '!':
+		return token_new(.BANG_EQUAL if lexer->match('=') else .BANG, lexer)
 
-        case lex->is_alpha(c): {
-            t = lex->identifier()
-        }
+	case c == '=':
+		return token_new(.EQUAL_EQUAL if lexer->match('=') else .EQUAL, lexer)
 
-        case: {
-            lox.error(lex.line, "Unexpected character.");
-        }
-    }
+	case c == '<':
+		return token_new(.LESS_EQUAL if lexer->match('=') else .LESS, lexer)
 
-    str:= string(lex.source[lex.start:lex.current])
-    append(&lex.tokens, token_new(t, str, str, lex.line))
+	case c == '>':
+		return token_new(.GREATER_EQUAL if lexer->match('=') else .GREATER, lexer)
+
+	case c == '"':
+		return lexer->string()
+
+	case lexer->is_digit(c):
+		return lexer->number()
+
+	case lexer->is_alpha(c):
+		return lexer->identifier()
+	}
+
+	return token_error("Unexpected character.", lexer)
 }
 
-lexer_advance :: proc(lex: ^lexer) -> rune {
-    r, size := utf8.decode_rune(lex.source[lex.current:])
-    lex.current += size
-    return r
+lexer_is_at_end :: proc(lexer: ^Lexer) -> bool {
+	if lexer.current >= len(lexer.source) do return true
+	return false
 }
 
-lexer_is_at_end :: proc(lex: ^lexer) -> bool {
-    return lex.current >= len(lex.source)
+lexer_advance :: proc(lexer: ^Lexer) -> byte {
+	current := lexer.source[lexer.current]
+	lexer.current += 1
+	return current
 }
 
-lexer_match :: proc(lex: ^lexer, search_needle: rune) -> bool {
-    if lex->is_at_end() do return false
+lexer_match :: proc(lexer: ^Lexer, c: byte) -> bool {
+	if lexer->is_at_end() do return false
+	if lexer.source[lexer.current] != c do return false
 
-    next_needle, s := utf8.decode_rune(lex.source[lex.current:])
-
-    if next_needle != search_needle do return false
-
-    lex.current += s
-    return true
+	lexer->advance()
+	return true
 }
 
-lexer_peek :: proc(lex: ^lexer)-> rune {
-    if lex->is_at_end() do return rune(0)
-    r, _ := utf8.decode_rune(lex.source[lex.current:])
-    return r
+lexer_peek :: proc(lexer: ^Lexer) -> byte {
+	if lexer->is_at_end() do return 0
+	return lexer.source[lexer.current]
 }
 
-lexer_peek_next :: proc(lex: ^lexer) -> rune {
-    how_far :: 2 // we only support up to 2 lookahead characters
-    current_pos := lex.current
-    r: rune = 0
-
-    for i in 0..< how_far{
-        if lex->is_at_end() do return rune(0)
-        c, size := utf8.decode_rune(lex.source[current_pos:])
-        r = c
-        current_pos += size
-    }
-
-    return r
+lexer_peek_next :: proc(lexer: ^Lexer) -> byte {
+	if lexer->is_at_end() do return 0
+	return lexer.source[lexer.current + 1]
 }
 
-lexer_is_digit :: proc(lex: ^lexer, c: rune) -> bool {
-    return c >= '0' && c <= '9'
+lexer_skip_whitespace :: proc(lexer: ^Lexer) {
+	for {
+		c := lexer->peek()
+		switch c {
+		case ' ', '\t', '\r':
+			lexer->advance()
+
+		case '\n':
+			{
+				lexer.line += 1
+				lexer->advance()
+			}
+
+		case '/':
+			{
+				if lexer->peek_next() == '/' {
+					for lexer->peek() != '\n' && !lexer->is_at_end() {
+						lexer->advance()
+					}
+				} else do return
+			}
+
+		case:
+			return
+		}
+	}
 }
 
-lexer_is_alpha :: proc(lex: ^lexer, c: rune) -> bool {
-    return c >= 'a' && c <= 'z' ||
-           c >= 'A' && c <= 'Z' ||
-           c == '_'
+lexer_string :: proc(lexer: ^Lexer) -> Token {
+	for lexer->peek() != '"' && !lexer->is_at_end() {
+		if lexer->peek() == '\n' do lexer.line += 1
+		lexer->advance()
+	}
+
+	if lexer->is_at_end() do return token_error("Unterminated string.", lexer)
+
+	lexer->match('"') // consume the closing quote
+
+	return token_new(.STRING, lexer)
 }
 
-lexer_is_alpha_numeric :: proc(lex: ^lexer, c: rune) -> bool {
-    return lex->is_alpha(c) || lex->is_digit(c)
+lexer_is_digit :: proc(lexer: ^Lexer, c: byte) -> bool {
+	return c >= '0' && c <= '9'
 }
 
-lexer_identifier :: proc(lex: ^lexer) -> TokenType {
-    for lex->is_alpha_numeric(lex->peek()) do lex->advance()
+lexer_is_alpha :: proc(lexer: ^Lexer, c: byte) -> bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+}
 
-    str := string(lex.source[lex.start:lex.current])
+lexer_number :: proc(lexer: ^Lexer) -> Token {
+	for lexer->is_digit(lexer->peek()) do lexer->advance()
 
-    if type, ok := Keywords[str]; ok {
-        return type
-    }
+	if lexer->peek() == '.' && lexer->is_digit(lexer->peek_next()) {
+		lexer->advance() // the dot
+		for lexer->is_digit(lexer->peek()) do lexer->advance()
+	}
 
-    return .IDENTIFIER
+	return token_new(.NUMBER, lexer)
+}
+
+lexer_identifier :: proc(lexer: ^Lexer) -> Token {
+	for lexer->is_digit(lexer->peek()) || lexer->is_alpha(lexer->peek()) do lexer->advance()
+
+	lexeme := lexer.source[lexer.start:lexer.current]
+
+	if keyword, ok := Keywords[string(lexeme)]; ok {
+		return token_new(keyword, lexer)
+	}
+
+	return token_new(.IDENTIFIER, lexer)
 }

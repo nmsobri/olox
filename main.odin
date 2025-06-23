@@ -1,89 +1,60 @@
 package main
 
-import "lox"
-import "core:fmt"
-import lex "lexer"
-import "vm"
 import "core:bufio"
+import "core:fmt"
 import os "core:os"
 import strings "core:strings"
+import lex "lexer"
+import "lox"
+import "vm"
 
 main :: proc() {
-//    if len(os.args) > 2 {
-//        fmt.eprintln("Usage: olox <file>")
-//        os.exit(1)
-//    } else if len(os.args) == 2 {
-//        run_file(os.args[1])
-//    } else {
-//        run_prompt()
-//    }
+	v := vm.vm_new()
+	defer v->free()
 
-    v := vm.vm_new()
-    defer v->free()
-
-    chunk := vm.chunk_new()
-    defer chunk->free()
-
-    chunk->write(u8(vm.OpCode.OP_CONSTANT), 1)
-    chunk->write(chunk->add_constant(3), 1)
-
-    chunk->write(u8(vm.OpCode.OP_CONSTANT), 1)
-    chunk->write(chunk->add_constant(4), 1)
-
-    chunk->write(u8(vm.OpCode.OP_ADD), 1)
-
-    chunk->write(u8(vm.OpCode.OP_CONSTANT), 1)
-    chunk->write(chunk->add_constant(6), 1)
-
-    chunk->write(u8(vm.OpCode.OP_DIVIDE),1)
-    chunk->write(u8(vm.OpCode.OP_NEGATE),1)
-
-    chunk->write(u8(vm.OpCode.OP_RETURN), 2)
-    // chunk->dissassemble("test chunk")
-
-    v->interpret(chunk)
+	if len(os.args) == 1 {
+		repl(v)
+	} else if len(os.args) == 2 {
+		run_file(os.args[1], v)
+	} else {
+		fmt.eprintln("Usage: olox [path]")
+		os.exit(1)
+	}
 }
 
-run_file :: proc(filename: string) {
-    if content , ok := os.read_entire_file(filename); ok {
-        run(content)
-        if lox.HadError do os.exit(1)
-    } else {
-        fmt.eprintln("Could not read file: ", filename)
-        os.exit(1)
-    }
+run_file :: proc(filename: string, v: ^vm.Vm) {
+	if content, ok := os.read_entire_file(filename); ok {
+		defer delete(content)
+		result := v->interpret(content)
+
+		if result == .INTERPRET_COMPILE_ERROR do os.exit(1)
+		if result == .INTERPRET_RUNTIME_ERROR do os.exit(1)
+	} else {
+		fmt.eprintfln("Could not open file \"%s\".", filename)
+		os.exit(1)
+	}
 }
 
-run_prompt :: proc() {
-    for {
-        fmt.print("> ")
+repl :: proc(v: ^vm.Vm) {
+	for {
+		fmt.print("> ")
 
-        reader: bufio.Reader
-        bufio.reader_init(&reader, os.stream_from_handle(os.stdin))
+		reader: bufio.Reader
+		stream := os.stream_from_handle(os.stdin)
+		bufio.reader_init(&reader, stream)
 
-        line, err := bufio.reader_read_string(&reader, '\n')
+		line, err := bufio.reader_read_string(&reader, '\n')
+		if err != nil {
+			if err == .EOF {
+				fmt.eprintln("Bye!")
+			} else {
+				fmt.eprintln("Error reading input: ", err)
+			}
 
-        if err != nil {
-            if err == .EOF {
-                fmt.eprintln("Bye!")
-            } else {
-                fmt.eprintln("Error reading input: ", err)
-            }
+			os.exit(1)
+		}
 
-            os.exit(1)
-        }
-
-        line = strings.trim_right(line,"\r\n" )
-        run(transmute([]byte)line)
-        lox.HadError = false // continue user session even there is an error
-    }
-}
-
-run :: proc(content: []byte) {
-    lexer := lex.lexer_new(content)
-    tokens := lexer->scan_tokens()
-
-    for &token in tokens {
-        fmt.println(token->to_string())
-    }
+		buffer := transmute([]byte)strings.trim_right(line, "\r\n")
+		v->interpret(buffer)
+	}
 }
