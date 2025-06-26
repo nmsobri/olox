@@ -2,6 +2,7 @@ package lexer
 import "../lox"
 import strconv "core:strconv"
 import utf8 "core:unicode/utf8"
+import unicode "core:unicode"
 
 Keywords := make(map[string]TokenType)
 
@@ -41,14 +42,14 @@ Lexer :: struct {
 lexer_proc :: struct {
 	scan_token:      proc(lexer: ^Lexer) -> Token,
 	is_at_end:       proc(lexer: ^Lexer) -> bool,
-	advance:         proc(lexer: ^Lexer) -> byte,
-	match:           proc(lexer: ^Lexer, c: byte) -> bool,
-	peek:            proc(lexer: ^Lexer) -> byte,
-	peek_next:       proc(lexer: ^Lexer) -> byte,
+	advance:         proc(lexer: ^Lexer) -> rune,
+	match:           proc(lexer: ^Lexer, r: rune) -> bool,
+	peek:            proc(lexer: ^Lexer) -> rune,
+	peek_next:       proc(lexer: ^Lexer) -> rune,
 	skip_whitespace: proc(lexer: ^Lexer),
 	string:          proc(lexer: ^Lexer) -> Token,
-	is_digit:        proc(lexer: ^Lexer, c: byte) -> bool,
-	is_alpha:        proc(lexer: ^Lexer, c: byte) -> bool,
+	is_digit:        proc(lexer: ^Lexer, r: rune) -> bool,
+	is_alpha:        proc(lexer: ^Lexer, r: rune) -> bool,
 	number:          proc(lexer: ^Lexer) -> Token,
 	identifier:      proc(lexer: ^Lexer) -> Token,
 }
@@ -150,28 +151,40 @@ lexer_is_at_end :: proc(lexer: ^Lexer) -> bool {
 	return false
 }
 
-lexer_advance :: proc(lexer: ^Lexer) -> byte {
-	current := lexer.source[lexer.current]
-	lexer.current += 1
-	return current
+lexer_advance :: proc(lexer: ^Lexer) -> rune {
+	r, size := utf8.decode_rune(lexer.source[lexer.current:])
+	lexer.current += size
+	return r
 }
 
-lexer_match :: proc(lexer: ^Lexer, c: byte) -> bool {
+lexer_match :: proc(lexer: ^Lexer, r: rune) -> bool {
 	if lexer->is_at_end() do return false
-	if lexer.source[lexer.current] != c do return false
+
+	fr, _ := utf8.decode_rune(lexer.source[lexer.current:])
+	if r != fr do return false
 
 	lexer->advance()
 	return true
 }
 
-lexer_peek :: proc(lexer: ^Lexer) -> byte {
+lexer_peek :: proc(lexer: ^Lexer) -> rune {
 	if lexer->is_at_end() do return 0
-	return lexer.source[lexer.current]
+	r, _ := utf8.decode_rune(lexer.source[lexer.current:])
+	return r
 }
 
-lexer_peek_next :: proc(lexer: ^Lexer) -> byte {
+lexer_peek_next :: proc(lexer: ^Lexer) -> rune {
 	if lexer->is_at_end() do return 0
-	return lexer.source[lexer.current + 1]
+
+	r: rune
+	current := lexer.current
+
+	for i in 0..<2 {
+		r, size := utf8.decode_rune(lexer.source[current:])
+		current += size
+	}
+
+	return r
 }
 
 lexer_skip_whitespace :: proc(lexer: ^Lexer) {
@@ -215,12 +228,16 @@ lexer_string :: proc(lexer: ^Lexer) -> Token {
 	return token_new(.STRING, lexer)
 }
 
-lexer_is_digit :: proc(lexer: ^Lexer, c: byte) -> bool {
-	return c >= '0' && c <= '9'
+lexer_is_digit :: proc(lexer: ^Lexer, r: rune) -> bool {
+	return unicode.is_digit(r)
 }
 
-lexer_is_alpha :: proc(lexer: ^Lexer, c: byte) -> bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_'
+lexer_is_alpha :: proc(lexer: ^Lexer, r: rune) -> bool {
+	return unicode.is_letter(r) ||
+		unicode.is_nonspacing_mark(r) ||
+		unicode.is_spacing_mark(r) ||
+		unicode.is_enclosing_mark(r) ||
+		r == '_'
 }
 
 lexer_number :: proc(lexer: ^Lexer) -> Token {
