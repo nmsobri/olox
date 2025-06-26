@@ -65,10 +65,10 @@ token_new :: proc(type: TokenType, lexer: ^Lexer) -> Token {
 	return Token {
 		type = type,
 		start = lexer.start,
-		length = lexer.current - lexer.start,
+		length = lexer.next - lexer.start,
 		line = lexer.line,
-		lexeme = string(lexer.source[lexer.start:lexer.current]),
-		literal = string(lexer.source[lexer.start:lexer.current]),
+		lexeme = string(lexer.source[lexer.start:lexer.next]),
+		literal = string(lexer.source[lexer.start:lexer.next]),
 	}
 }
 

@@ -1,8 +1,8 @@
 package lexer
 import "../lox"
 import strconv "core:strconv"
-import utf8 "core:unicode/utf8"
 import unicode "core:unicode"
+import utf8 "core:unicode/utf8"
 
 Keywords := make(map[string]TokenType)
 
@@ -34,7 +34,7 @@ deinit :: proc() {
 Lexer :: struct {
 	source:           []byte,
 	start:            int,
-	current:          int,
+	next:             int,
 	line:             int,
 	using lexer_proc: lexer_proc,
 }
@@ -47,7 +47,7 @@ lexer_proc :: struct {
 	peek:            proc(lexer: ^Lexer) -> rune,
 	peek_next:       proc(lexer: ^Lexer) -> rune,
 	skip_whitespace: proc(lexer: ^Lexer),
-	string:          proc(lexer: ^Lexer) -> Token,
+	strings:         proc(lexer: ^Lexer) -> Token,
 	is_digit:        proc(lexer: ^Lexer, r: rune) -> bool,
 	is_alpha:        proc(lexer: ^Lexer, r: rune) -> bool,
 	number:          proc(lexer: ^Lexer) -> Token,
@@ -59,7 +59,7 @@ lexer_new :: proc(source: []byte) -> ^Lexer {
 
 	lex.source = source
 	lex.start = 0
-	lex.current = 0
+	lex.next = 0
 	lex.line = 1
 
 	lex.scan_token = lexer_scan_token
@@ -69,7 +69,7 @@ lexer_new :: proc(source: []byte) -> ^Lexer {
 	lex.peek = lexer_peek
 	lex.peek_next = lexer_peek_next
 	lex.skip_whitespace = lexer_skip_whitespace
-	lex.string = lexer_string
+	lex.strings = lexer_string
 	lex.is_digit = lexer_is_digit
 	lex.is_alpha = lexer_is_alpha
 	lex.number = lexer_number
@@ -81,7 +81,7 @@ lexer_new :: proc(source: []byte) -> ^Lexer {
 lexer_scan_token :: proc(lexer: ^Lexer) -> Token {
 	lexer->skip_whitespace()
 
-	lexer.start = lexer.current
+	lexer.start = lexer.next
 
 	if lexer->is_at_end() do return token_new(.EOF, lexer)
 
@@ -134,7 +134,7 @@ lexer_scan_token :: proc(lexer: ^Lexer) -> Token {
 		return token_new(.GREATER_EQUAL if lexer->match('=') else .GREATER, lexer)
 
 	case c == '"':
-		return lexer->string()
+		return lexer->strings()
 
 	case lexer->is_digit(c):
 		return lexer->number()
@@ -147,20 +147,20 @@ lexer_scan_token :: proc(lexer: ^Lexer) -> Token {
 }
 
 lexer_is_at_end :: proc(lexer: ^Lexer) -> bool {
-	if lexer.current >= len(lexer.source) do return true
+	if lexer.next >= len(lexer.source) do return true
 	return false
 }
 
 lexer_advance :: proc(lexer: ^Lexer) -> rune {
-	r, size := utf8.decode_rune(lexer.source[lexer.current:])
-	lexer.current += size
+	r, size := utf8.decode_rune(lexer.source[lexer.next:])
+	lexer.next += size
 	return r
 }
 
 lexer_match :: proc(lexer: ^Lexer, r: rune) -> bool {
 	if lexer->is_at_end() do return false
 
-	fr, _ := utf8.decode_rune(lexer.source[lexer.current:])
+	fr, _ := utf8.decode_rune(lexer.source[lexer.next:])
 	if r != fr do return false
 
 	lexer->advance()
@@ -169,7 +169,7 @@ lexer_match :: proc(lexer: ^Lexer, r: rune) -> bool {
 
 lexer_peek :: proc(lexer: ^Lexer) -> rune {
 	if lexer->is_at_end() do return 0
-	r, _ := utf8.decode_rune(lexer.source[lexer.current:])
+	r, _ := utf8.decode_rune(lexer.source[lexer.next:])
 	return r
 }
 
@@ -177,10 +177,11 @@ lexer_peek_next :: proc(lexer: ^Lexer) -> rune {
 	if lexer->is_at_end() do return 0
 
 	r: rune
-	current := lexer.current
+	current := lexer.next
 
-	for i in 0..<2 {
-		r, size := utf8.decode_rune(lexer.source[current:])
+	for i in 0 ..< 2 {
+		size: int
+		r, size = utf8.decode_rune(lexer.source[current:])
 		current += size
 	}
 
@@ -233,11 +234,13 @@ lexer_is_digit :: proc(lexer: ^Lexer, r: rune) -> bool {
 }
 
 lexer_is_alpha :: proc(lexer: ^Lexer, r: rune) -> bool {
-	return unicode.is_letter(r) ||
+	return(
+		unicode.is_letter(r) ||
 		unicode.is_nonspacing_mark(r) ||
 		unicode.is_spacing_mark(r) ||
 		unicode.is_enclosing_mark(r) ||
-		r == '_'
+		r == '_' \
+	)
 }
 
 lexer_number :: proc(lexer: ^Lexer) -> Token {
@@ -254,7 +257,7 @@ lexer_number :: proc(lexer: ^Lexer) -> Token {
 lexer_identifier :: proc(lexer: ^Lexer) -> Token {
 	for lexer->is_digit(lexer->peek()) || lexer->is_alpha(lexer->peek()) do lexer->advance()
 
-	lexeme := lexer.source[lexer.start:lexer.current]
+	lexeme := lexer.source[lexer.start:lexer.next]
 
 	if keyword, ok := Keywords[string(lexeme)]; ok {
 		return token_new(keyword, lexer)

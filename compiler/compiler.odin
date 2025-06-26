@@ -38,7 +38,7 @@ compile :: proc(compiler: ^Compiler, source: []u8) {
 		}
 
 		lexeme :=
-			"<EOF>" if token.type == .EOF else string(lexer.source[lexer.start:lexer.current])
+			"<EOF>" if token.type == .EOF else string(lexer.source[lexer.start:lexer.next])
 
 		fmt.printfln("%s %s", token.type, lexeme)
 

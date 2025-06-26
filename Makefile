@@ -1,3 +1,5 @@
+.PHONY: run test clean
+
 exe=olox
 
 $(exe):
@@ -5,6 +7,9 @@ $(exe):
 
 run: $(exe)
 	@./bin/$(exe) examples/main.lox
+
+test:
+	@odin test . -all-packages -out:$(exe) && rm -rf $(exe)
 
 clean:
 	@clear && rm -rf bin/*
