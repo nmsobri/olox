@@ -3,17 +3,21 @@ package compiler
 import lex "../lexer"
 import "core:fmt"
 
+compiler_proc :: struct {
+	compile: proc(c: ^Compiler),
+	free : proc(c: ^Compiler),
+}
+
 Compiler :: struct {
+	lexer:               ^lex.Lexer,
 	using compiler_proc: compiler_proc,
 }
 
-compiler_proc :: struct {
-	compile: proc(c: ^Compiler, source: []u8),
-}
-
-compiler_new :: proc() -> ^Compiler {
+compiler_new :: proc(lexer: ^lex.Lexer) -> ^Compiler {
 	c := new(Compiler)
-	c.compile = compile
+	c.lexer = lexer
+	c.compile = compiler_compile
+	c.free = compiler_free
 	return c
 }
 
@@ -23,12 +27,11 @@ compiler_free :: proc(c: ^Compiler) {
 	}
 }
 
-compile :: proc(compiler: ^Compiler, source: []u8) {
+compiler_compile :: proc(c: ^Compiler) {
 	line := 0
-	lexer := lex.lexer_new(source)
 
 	for {
-		token := lexer->scan_token()
+		token := c.lexer->scan_token()
 
 		if token.line != line {
 			fmt.printf("%4d ", token.line)
@@ -37,8 +40,7 @@ compile :: proc(compiler: ^Compiler, source: []u8) {
 			fmt.print("   | ")
 		}
 
-		lexeme :=
-			"<EOF>" if token.type == .EOF else string(lexer.source[lexer.start:lexer.next])
+		lexeme := "<EOF>" if token.type == .EOF else string(c.lexer.source[c.lexer.start:c.lexer.next])
 
 		fmt.printfln("%s %s", token.type, lexeme)
 

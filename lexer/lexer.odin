@@ -31,14 +31,6 @@ deinit :: proc() {
 	delete(Keywords)
 }
 
-Lexer :: struct {
-	source:           []byte,
-	start:            int,
-	next:             int,
-	line:             int,
-	using lexer_proc: lexer_proc,
-}
-
 lexer_proc :: struct {
 	scan_token:      proc(lexer: ^Lexer) -> Token,
 	is_at_end:       proc(lexer: ^Lexer) -> bool,
@@ -52,7 +44,18 @@ lexer_proc :: struct {
 	is_alpha:        proc(lexer: ^Lexer, r: rune) -> bool,
 	number:          proc(lexer: ^Lexer) -> Token,
 	identifier:      proc(lexer: ^Lexer) -> Token,
+	free : proc(lexer: ^Lexer),
+
 }
+
+Lexer :: struct {
+	source:           []byte,
+	start:            int,
+	next:             int,
+	line:             int,
+	using lexer_proc: lexer_proc,
+}
+
 
 lexer_new :: proc(source: []byte) -> ^Lexer {
 	lex := new(Lexer)
@@ -74,8 +77,15 @@ lexer_new :: proc(source: []byte) -> ^Lexer {
 	lex.is_alpha = lexer_is_alpha
 	lex.number = lexer_number
 	lex.identifier = lexer_identifier
+	lex.free = lexer_free
 
 	return lex
+}
+
+lexer_free :: proc(lexer: ^Lexer) {
+	if lexer != nil {
+		free(lexer)
+	}
 }
 
 lexer_scan_token :: proc(lexer: ^Lexer) -> Token {

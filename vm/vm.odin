@@ -5,6 +5,8 @@ DEBUG_TRACE_EXECUTION :: true
 
 import fmt "core:fmt"
 import compiler "../compiler"
+import lexer "../lexer"
+import parser "../parser"
 
 InterpretResult :: enum u8 {
     INTERPRET_OK,
@@ -51,11 +53,18 @@ vm_free :: proc(vm: ^Vm) {
 }
 
 vm_interpret :: proc(v: ^Vm, source: []byte) -> InterpretResult {
-    c := compiler.compiler_new()
-    defer compiler.compiler_free(c)
+    l := lexer.lexer_new(source)
+    defer l->free()
 
-    c->compile(source)
-    return .INTERPRET_OK
+    p := parser.parser_new(l)
+    p->parse_program()
+
+    // c := compiler.compiler_new(l)
+    // defer c->free()
+
+    // c->compile()
+
+     return .INTERPRET_OK
 }
 
 vm_run :: proc(v: ^Vm) -> InterpretResult {
