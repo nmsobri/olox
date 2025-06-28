@@ -44,8 +44,7 @@ lexer_proc :: struct {
 	is_alpha:        proc(lexer: ^Lexer, r: rune) -> bool,
 	number:          proc(lexer: ^Lexer) -> Token,
 	identifier:      proc(lexer: ^Lexer) -> Token,
-	free : proc(lexer: ^Lexer),
-
+	free:            proc(lexer: ^Lexer),
 }
 
 Lexer :: struct {

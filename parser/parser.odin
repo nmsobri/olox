@@ -7,6 +7,7 @@ parser_proc :: struct {
 	parse_program:              proc(p: ^Parser) -> Program,
 	parse_statement:            proc(p: ^Parser) -> Statement,
 	parse_expression_statement: proc(p: ^Parser) -> ExprStmt,
+	parse_expression:           proc(p: ^Parser) -> Expr,
 	parse_var_statement:        proc(p: ^Parser) -> Statement,
 	next_token:                 proc(p: ^Parser) -> lex.Token,
 	peek_token:                 proc(p: ^Parser) -> lex.Token,
@@ -26,6 +27,7 @@ parser_new :: proc(lexer: ^lex.Lexer) -> ^Parser {
 	p.parse_program = parser_parse_program
 	p.parse_statement = parser_parse_statement
 	p.parse_expression_statement = parser_parse_expression_statement
+	p.parse_expression = parser_parse_expression
 	p.parse_var_statement = parser_parse_var_statement
 	p.next_token = parser_next_token
 	p.peek_token = parser_peek_token
@@ -44,14 +46,15 @@ parser_parse_program :: proc(p: ^Parser) -> Program {
 		statements = make([dynamic]Statement),
 	}
 
-	p->parse_statement()
+	stmt := p->parse_statement()
+
+	append(&program.statements, stmt)
 
 	return program
 }
 
 parser_parse_statement :: proc(p: ^Parser) -> Statement {
 	#partial switch p.current_token.type {
-
 	case .VAR:
 		return p->parse_var_statement()
 
@@ -62,16 +65,17 @@ parser_parse_statement :: proc(p: ^Parser) -> Statement {
 
 parser_parse_var_statement :: proc(p: ^Parser) -> Statement {
 	ident := p->match_token(.IDENTIFIER)
+
 	p->match_token(.EQUAL)
+
 	val := p->parse_expression_statement()
 
 	return VarStmt{name = ident.lexeme, value = val.expression}
 }
 
 parser_parse_expression_statement :: proc(p: ^Parser) -> ExprStmt {
-	return ExprStmt {
-		expression = LiteralExpr(1)
-	}
+	expression := p->parse_expression()
+	return ExprStmt{expression = expression}
 }
 
 parser_next_token :: proc(p: ^Parser) -> lex.Token {
@@ -93,4 +97,9 @@ parser_match_token :: proc(p: ^Parser, token_type: lex.TokenType) -> lex.Token {
 	}
 
 	return p->next_token()
+}
+
+parser_parse_expression :: proc(p: ^Parser) -> Expr {
+	p->next_token()
+	return LiteralExpr(p.current_token.literal)
 }

@@ -1,6 +1,9 @@
 package lexer
 
-import fmt "core:fmt"
+import "core:fmt"
+import "core:strconv"
+import "core:strings"
+import "core:unicode/utf8"
 
 TokenType :: enum {
 	LEFT_PAREN,
@@ -46,9 +49,10 @@ TokenType :: enum {
 }
 
 Literal :: union {
+	f64,
+	i64,
 	string,
 	bool,
-	f64,
 }
 
 Token :: struct {
@@ -62,13 +66,40 @@ Token :: struct {
 }
 
 token_new :: proc(type: TokenType, lexer: ^Lexer) -> Token {
+	literal: Literal
+
+	#partial switch type {
+	case .STRING:
+		size := utf8.rune_size('"') // get `"` byte count to strip those `"`
+		literal = string(lexer.source[lexer.start + size:lexer.next - size])
+
+	case .NUMBER:
+		str_num := string(lexer.source[lexer.start:lexer.next])
+
+		if strings.contains_rune(str_num, '.') {
+			if num, ok := strconv.parse_f64(str_num); ok {
+				literal = f64(num)
+			}
+		} else {
+			if num, ok := strconv.parse_int(str_num); ok {
+				literal = i64(num)
+			}
+		}
+
+	case .TRUE, .FALSE:
+		literal = true if type == .TRUE else false
+
+	case:
+		literal = string(lexer.source[lexer.start:lexer.next])
+	}
+
 	return Token {
 		type = type,
 		start = lexer.start,
 		length = lexer.next - lexer.start,
 		line = lexer.line,
 		lexeme = string(lexer.source[lexer.start:lexer.next]),
-		literal = string(lexer.source[lexer.start:lexer.next]),
+		literal = literal,
 	}
 }
 
