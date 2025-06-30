@@ -79,11 +79,11 @@ token_new :: proc(type: TokenType, lexer: ^Lexer) -> Token {
 		if strings.contains_rune(str_num, '.') {
 			if num, ok := strconv.parse_f64(str_num); ok {
 				literal = f64(num)
-			}
+			} else do panic("invalid number")
 		} else {
 			if num, ok := strconv.parse_int(str_num); ok {
 				literal = i64(num)
-			}
+			} else do panic("invalid number")
 		}
 
 	case .TRUE, .FALSE:

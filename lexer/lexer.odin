@@ -5,6 +5,7 @@ import unicode "core:unicode"
 import utf8 "core:unicode/utf8"
 
 Keywords := make(map[string]TokenType)
+BindingPower := make(map[TokenType]int)
 
 @(init)
 init :: proc() {
@@ -24,11 +25,17 @@ init :: proc() {
 	Keywords["true"] = .TRUE
 	Keywords["var"] = .VAR
 	Keywords["while"] = .WHILE
+
+	BindingPower[TokenType.PLUS] = 1
+	BindingPower[TokenType.MINUS] = 1
+	BindingPower[TokenType.STAR] = 2
+	BindingPower[TokenType.SLASH] = 2
 }
 
 @(fini)
 deinit :: proc() {
 	delete(Keywords)
+	delete(BindingPower)
 }
 
 lexer_proc :: struct {
