@@ -60,7 +60,7 @@ vm_interpret :: proc(v: ^Vm, source: []byte) -> InterpretResult {
     defer p->free()
 
     program := p->parse_program()
-    fmt.println(program.statements)
+    fmt.println(parser.to_string(program))
 
     // c := compiler.compiler_new(l)
     // defer c->free()

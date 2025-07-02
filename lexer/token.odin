@@ -6,20 +6,20 @@ import "core:strings"
 import "core:unicode/utf8"
 
 TokenType :: enum {
+	DOT,
+	COMMA,
 	LEFT_PAREN,
 	RIGHT_PAREN,
 	LEFT_BRACE,
 	RIGHT_BRACE,
-	COMMA,
-	DOT,
-	MINUS,
-	PLUS,
 	SEMICOLON,
-	SLASH,
+	PLUS,
+	MINUS, // todo unary
 	STAR,
-	BANG,
+	SLASH,
+	BANG, // todo unary
+	EQUAL, // not expressoin
 	BANG_EQUAL,
-	EQUAL,
 	EQUAL_EQUAL,
 	GREATER,
 	GREATER_EQUAL,

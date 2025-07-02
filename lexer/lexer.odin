@@ -26,10 +26,17 @@ init :: proc() {
 	Keywords["var"] = .VAR
 	Keywords["while"] = .WHILE
 
-	BindingPower[TokenType.PLUS] = 1
-	BindingPower[TokenType.MINUS] = 1
-	BindingPower[TokenType.STAR] = 2
-	BindingPower[TokenType.SLASH] = 2
+	BindingPower[.LESS] = 1
+	BindingPower[.LESS_EQUAL] = 1
+	BindingPower[.GREATER] = 1
+	BindingPower[.GREATER_EQUAL] = 1
+	BindingPower[.BANG_EQUAL] = 1
+	BindingPower[.EQUAL_EQUAL] = 1
+
+	BindingPower[TokenType.PLUS] = 2
+	BindingPower[TokenType.MINUS] = 2
+	BindingPower[TokenType.STAR] = 3
+	BindingPower[TokenType.SLASH] = 3
 }
 
 @(fini)
