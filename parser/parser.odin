@@ -1,6 +1,7 @@
 package parser
 import lex "../lexer"
 import fmt "core:fmt"
+import "core:mem"
 
 parser_proc :: struct {
 	parse_program:              proc(p: ^Parser) -> Program,
@@ -14,17 +15,17 @@ parser_proc :: struct {
 	next_token:                 proc(p: ^Parser) -> lex.Token,
 	peek_token:                 proc(p: ^Parser) -> lex.Token,
 	expect_token:               proc(p: ^Parser, token: lex.TokenType) -> lex.Token,
-	free:                       proc(p: ^Parser),
 }
 
 Parser :: struct {
 	lexer:             ^lex.Lexer,
 	current_token:     lex.Token,
+	allocator:         mem.Allocator,
 	using parser_proc: parser_proc,
 }
 
-parser_new :: proc(lexer: ^lex.Lexer) -> ^Parser {
-	p := new(Parser)
+parser_new :: proc(lexer: ^lex.Lexer, allocator: mem.Allocator) -> ^Parser {
+	p := new(Parser, allocator)
 
 	p.lexer = lexer
 	p.parse_program = parser_parse_program
@@ -38,19 +39,15 @@ parser_new :: proc(lexer: ^lex.Lexer) -> ^Parser {
 	p.next_token = parser_next_token
 	p.peek_token = parser_peek_token
 	p.expect_token = parser_expect_token
-	p.free = parser_free
+	p.allocator = allocator
 
 	p->next_token()
 	return p
 }
 
-parser_free :: proc(parser: ^Parser) {
-	free(parser)
-}
-
 parser_parse_program :: proc(p: ^Parser) -> Program {
 	program := Program {
-		statements = make([dynamic]Statement, context.allocator),
+		statements = make([dynamic]Statement, p.allocator),
 	}
 
 	for p.current_token.type != .EOF {
@@ -75,9 +72,10 @@ parser_parse_statement :: proc(p: ^Parser) -> Statement {
 parser_parse_var_statement :: proc(p: ^Parser) -> Statement {
 	ident := p->expect_token(.IDENTIFIER)
 	p->expect_token(.EQUAL)
-	val := p->parse_expression_statement()
+	p->next_token()
+	val := p->parse_expression(0)
 
-	return VarStmt{name = ident.lexeme, value = val.expression}
+	return VarStmt{name = ident.lexeme, value = val}
 }
 
 parser_parse_expression_statement :: proc(p: ^Parser) -> ExprStmt {
@@ -86,7 +84,6 @@ parser_parse_expression_statement :: proc(p: ^Parser) -> ExprStmt {
 }
 
 parser_parse_expression :: proc(p: ^Parser, current_binding_power: int) -> Expr {
-	p->next_token()
 	left: Expr = p->parse_prefix_expression()
 
 	next_binding_power := lex.BindingPower[p->peek_token().type]
@@ -101,12 +98,15 @@ parser_parse_expression :: proc(p: ^Parser, current_binding_power: int) -> Expr 
 }
 
 parser_parse_prefix_expression :: proc(p: ^Parser) -> Expr {
+	context.allocator = p.allocator
+
 	#partial switch p.current_token.type {
 	case .NUMBER, .STRING, .TRUE, .FALSE:
 		return LiteralExpr(p.current_token.literal)
 
 	case .LEFT_PAREN:
 		// grouped expression
+		p->next_token()
 		expr := p->parse_expression(0)
 		p->expect_token(.RIGHT_PAREN)
 		return expr
@@ -114,21 +114,28 @@ parser_parse_prefix_expression :: proc(p: ^Parser) -> Expr {
 	case .MINUS, .BANG:
 		op := p.current_token.lexeme
 		right := new(Expr)
+		p->next_token()
 		right^ = p->parse_expression(0)
 		return UnaryExpr{operator = op, right = right}
 
 	case:
-		msg := fmt.tprintf(
-			"parser error: unexpected prefix token `%s`",
-			p.current_token.lexeme,
-		)
+		msg := fmt.tprintf("parser error: unexpected prefix token `%s`", p.current_token.lexeme)
 		panic(msg)
 	}
 }
 
 parser_parse_infix_expression :: proc(p: ^Parser, left: Expr, current_binding_power: int) -> Expr {
 	#partial switch p.current_token.type {
-	case .PLUS, .MINUS, .STAR, .SLASH, .BANG_EQUAL, .EQUAL_EQUAL, .GREATER, .GREATER_EQUAL, .LESS, .LESS_EQUAL:
+	case .PLUS,
+	     .MINUS,
+	     .STAR,
+	     .SLASH,
+	     .BANG_EQUAL,
+	     .EQUAL_EQUAL,
+	     .GREATER,
+	     .GREATER_EQUAL,
+	     .LESS,
+	     .LESS_EQUAL:
 		return p->parse_binary_expression(left, current_binding_power)
 
 	case:
@@ -142,13 +149,14 @@ parser_parse_binary_expression :: proc(
 	left: Expr,
 	current_binding_power: int,
 ) -> Expr {
-	context.allocator = context.temp_allocator
+	context.allocator = p.allocator
 	op := p.current_token.lexeme
 
 	shadow_left := new(Expr)
 	shadow_left^ = left
 
 	right := new(Expr)
+	p->next_token()
 	right^ = p->parse_expression(current_binding_power)
 	return BinaryExpr{left = shadow_left, operator = op, right = right}
 }

@@ -6,7 +6,7 @@ import "core:strings"
 
 // Helper function to create a test lexer
 test_lexer :: proc(source: string) -> ^Lexer {
-    return lexer_new(transmute([]byte)source)
+    return lexer_new(transmute([]byte)source, context.temp_allocator)
 }
 
 // Helper function to scan all tokens from source

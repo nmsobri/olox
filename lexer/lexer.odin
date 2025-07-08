@@ -3,6 +3,7 @@ import "../lox"
 import strconv "core:strconv"
 import unicode "core:unicode"
 import utf8 "core:unicode/utf8"
+import mem "core:mem"
 
 Keywords := make(map[string]TokenType)
 BindingPower := make(map[TokenType]int)
@@ -58,7 +59,6 @@ lexer_proc :: struct {
 	is_alpha:        proc(lexer: ^Lexer, r: rune) -> bool,
 	number:          proc(lexer: ^Lexer) -> Token,
 	identifier:      proc(lexer: ^Lexer) -> Token,
-	free:            proc(lexer: ^Lexer),
 }
 
 Lexer :: struct {
@@ -70,8 +70,8 @@ Lexer :: struct {
 }
 
 
-lexer_new :: proc(source: []byte) -> ^Lexer {
-	lex := new(Lexer)
+lexer_new :: proc(source: []byte, allocator: mem.Allocator) -> ^Lexer {
+	lex := new(Lexer, allocator)
 
 	lex.source = source
 	lex.start = 0
@@ -90,15 +90,8 @@ lexer_new :: proc(source: []byte) -> ^Lexer {
 	lex.is_alpha = lexer_is_alpha
 	lex.number = lexer_number
 	lex.identifier = lexer_identifier
-	lex.free = lexer_free
 
 	return lex
-}
-
-lexer_free :: proc(lexer: ^Lexer) {
-	if lexer != nil {
-		free(lexer)
-	}
 }
 
 lexer_scan_token :: proc(lexer: ^Lexer) -> Token {

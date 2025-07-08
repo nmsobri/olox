@@ -1,14 +1,40 @@
 package main
 
-import "core:bufio"
-import "core:fmt"
-import os "core:os"
-import strings "core:strings"
-import lex "lexer"
 import "lox"
 import "vm"
+import "core:mem"
+import "core:fmt"
+import lex "lexer"
+import "core:bufio"
+import os "core:os"
+import strings "core:strings"
+import vmem "core:mem/virtual"
 
 main :: proc() {
+	arena : vmem.Arena
+	err := vmem.arena_init_growing(&arena)
+	assert(err == nil, "Failed to initialize arena allocator")
+	context.allocator = vmem.arena_allocator(&arena)
+
+	ta : mem.Tracking_Allocator
+	mem.tracking_allocator_init(&ta, context.allocator)
+	context.allocator = mem.tracking_allocator(&ta)
+
+	defer {
+		if len(ta.allocation_map) > 0 {
+			for _, leak in ta.allocation_map {
+				fmt.eprintf("- Leaked %v bytes @ %v\n", leak.size, leak.location)
+			}
+		}
+
+		mem.tracking_allocator_destroy(&ta)
+	}
+
+	defer {
+		free_all(context.allocator)
+		vmem.arena_destroy(&arena)
+	}
+
 	v := vm.vm_new()
 	defer v->free()
 
@@ -23,8 +49,9 @@ main :: proc() {
 }
 
 run_file :: proc(filename: string, v: ^vm.Vm) {
-	if content, ok := os.read_entire_file(filename); ok {
-		defer delete(content)
+	defer free_all(context.temp_allocator)
+
+	if content, ok := os.read_entire_file(filename, context.temp_allocator); ok {
 		result := v->interpret(content)
 
 		if result == .INTERPRET_COMPILE_ERROR do os.exit(1)
@@ -36,14 +63,15 @@ run_file :: proc(filename: string, v: ^vm.Vm) {
 }
 
 repl :: proc(v: ^vm.Vm) {
+	reader: bufio.Reader
+	stream := os.stream_from_handle(os.stdin)
+	bufio.reader_init(&reader, stream)
+
 	for {
 		fmt.print("> ")
 
-		reader: bufio.Reader
-		stream := os.stream_from_handle(os.stdin)
-		bufio.reader_init(&reader, stream)
-
 		line, err := bufio.reader_read_string(&reader, '\n')
+
 		if err != nil {
 			if err == .EOF {
 				fmt.eprintln("Bye!")

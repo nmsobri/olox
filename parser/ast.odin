@@ -142,17 +142,19 @@ statement_to_string :: proc(stmt: Statement) -> string {
 
 program_to_string :: proc(program: Program) -> string {
 	result := "[\n"
+
 	for stmt, i in program.statements {
 		if i > 0 do result = fmt.tprintf("%s,\n", result)
 
 		stmt_str := to_string(stmt)
-		lines := strings.split(stmt_str, "\n")
+		lines := strings.split(stmt_str, "\n", context.temp_allocator)
 
 		for line, j in lines {
 			if j > 0 do result = fmt.tprintf("%s\n", result)
 			result = fmt.tprintf("%s  %s", result, line)
 		}
 	}
+
 	result = fmt.tprintf("%s\n]", result)
 	return result
 }

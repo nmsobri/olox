@@ -1,12 +1,12 @@
+1 + 2
 var salary = 999 * ( 2 + 3 ) - 5
-// var expr = 1 + 2 != 2
-// var expr = 1 + 2 == 2
-// var expr = 1 + 2 > 2
-// var expr = 1 + 2 >= 2
-// var expr = 1 + 2 < 2
-// var expr = 1 + 2 <= 2
-// var expr = -5
-// var expr = !false
+var expr = 1 + 2 != 2
+var expr = 1 + 2 == 2
+var expr = 1 + 2 > 2
+var expr = 1 + 2 >= 2
+var expr = 1 + 2 < 2
+var expr = 1 + 2 <= 2
+var expr = -5
+var expr = !false
 var expr = !true
 var job = "developer"
-

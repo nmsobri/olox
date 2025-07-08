@@ -7,6 +7,8 @@ import fmt "core:fmt"
 import compiler "../compiler"
 import lexer "../lexer"
 import parser "../parser"
+import vmem "core:mem/virtual"
+import "core:mem"
 
 InterpretResult :: enum u8 {
     INTERPRET_OK,
@@ -53,11 +55,8 @@ vm_free :: proc(vm: ^Vm) {
 }
 
 vm_interpret :: proc(v: ^Vm, source: []byte) -> InterpretResult {
-    l := lexer.lexer_new(source)
-    defer l->free()
-
-    p := parser.parser_new(l)
-    defer p->free()
+    l := lexer.lexer_new(source, context.allocator)
+    p := parser.parser_new(l,context.allocator)
 
     program := p->parse_program()
     fmt.println(parser.to_string(program))
